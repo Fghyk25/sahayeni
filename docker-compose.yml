@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # PocketBase Database Server
+  pocketbase:
+    image: ghcr.io/pocketbase/pocketbase:v0.22.0
+    container_name: atssaha_pocketbase
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - pocketbase_data:/pb/data
+      - pocketbase_logs:/pb/logs
+    environment:
+      - TZ=Europe/Istanbul
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8090/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Frontend Application (Vite + React) - Production with nginx
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: atssaha_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      - TZ=Europe/Istanbul
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+    profiles:
+      - production
+
+  # Development server with hot reload
+  frontend-dev:
+    image: node:20-alpine
+    container_name: atssaha_frontend_dev
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    environment:
+      - TZ=Europe/Istanbul
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - pocketbase
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    profiles:
+      - development
+
+volumes:
+  pocketbase_data:
+    driver: local
+  pocketbase_logs:
+    driver: local
